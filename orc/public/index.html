@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Financial Boardroom</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <div class="question-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Student finance</p>
+            <h1>Multi-Agent Financial Boardroom</h1>
+          </div>
+
+          <label>
+            Financial question
+            <textarea id="question" rows="3">Should I take Rs 50,000 education loan?</textarea>
+          </label>
+
+          <div class="grid two">
+            <label>Monthly income <input id="income" type="number" value="15000" /></label>
+            <label>Monthly expenses <input id="expenses" type="number" value="9000" /></label>
+            <label>Savings <input id="savings" type="number" value="5000" /></label>
+            <label>Existing debt EMI <input id="debt" type="number" value="0" /></label>
+            <label>Loan amount <input id="loan" type="number" value="50000" /></label>
+            <label>Proposed EMI <input id="emi" type="number" value="3500" /></label>
+            <label>Emergency fund <input id="emergency" type="number" value="5000" /></label>
+            <label>Course length months <input id="course" type="number" value="3" /></label>
+            <label>Income uplift % <input id="uplift" type="number" value="40" /></label>
+            <label>Other outflows <input id="outflows" type="number" value="0" /></label>
+          </div>
+
+          <label>
+            Goals
+            <textarea id="goals" rows="4">Placement prep,2026-12,20000
+Emergency buffer,2026-09,18000
+Laptop upgrade,2026-10,30000</textarea>
+          </label>
+
+          <button id="run" type="button">Run boardroom</button>
+        </div>
+
+        <div class="results">
+          <div class="cards">
+            <article class="card" id="budget-card">
+              <span class="agent">Budget</span>
+              <strong class="verdict">Waiting</strong>
+              <p class="numbers">Debt-to-income and EMI load</p>
+              <p class="analysis">Run the boardroom to evaluate the numeric fit.</p>
+            </article>
+            <article class="card" id="planner-card">
+              <span class="agent">Planner</span>
+              <strong class="verdict">Waiting</strong>
+              <p class="numbers">ROI and goal impact</p>
+              <p class="analysis">Run the boardroom to estimate strategic upside.</p>
+            </article>
+            <article class="card" id="realist-card">
+              <span class="agent">Realist</span>
+              <strong class="verdict">Waiting</strong>
+              <p class="numbers">Emergency fund and risks</p>
+              <p class="analysis">Run the boardroom to stress-test assumptions.</p>
+            </article>
+          </div>
+
+          <article class="coordinator" id="coordinator-card">
+            <div>
+              <span class="agent">Coordinator</span>
+              <strong class="verdict">Waiting</strong>
+            </div>
+            <p class="recommendation">One synthesized recommendation will appear here.</p>
+            <div class="summary-lines">
+              <p id="agrees"></p>
+              <p id="tradeoff"></p>
+            </div>
+            <ol id="steps"></ol>
+          </article>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

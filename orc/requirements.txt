@@ -1,0 +1,9 @@
+streamlit>=1.35
+paddlepaddle>=2.6
+paddleocr>=2.7
+pandas>=2.2
+plotly>=5.22
+pillow>=10.3
+numpy>=1.26
+openpyxl>=3.1
+pypdfium2>=4.30
