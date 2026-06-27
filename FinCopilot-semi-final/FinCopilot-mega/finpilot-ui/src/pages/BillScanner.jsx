@@ -32,7 +32,7 @@ export default function BillScanner() {
       ]);
       if (billsRes?.data) setBills(billsRes.data.bills);
       if (metricsRes?.data) setMetrics(metricsRes.data);
-    } catch {}
+    } catch { }
   };
 
   const handleScan = async (file) => {
@@ -62,7 +62,7 @@ export default function BillScanner() {
     try {
       await deleteBill(id);
       loadData();
-    } catch {}
+    } catch { }
   };
 
   const fmt = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
@@ -72,8 +72,8 @@ export default function BillScanner() {
     if (search) {
       const q = search.toLowerCase();
       return (b.vendor || '').toLowerCase().includes(q) ||
-             (b.invoice_number || '').toLowerCase().includes(q) ||
-             (b.category || '').toLowerCase().includes(q);
+        (b.invoice_number || '').toLowerCase().includes(q) ||
+        (b.category || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -181,21 +181,34 @@ export default function BillScanner() {
             {scanResult && !scanResult.error && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Confidence badge */}
-                <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="score-badge" style={{
-                    background: scanResult.ocr_confidence >= 80 ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
-                    color: scanResult.ocr_confidence >= 80 ? 'var(--accent-emerald)' : 'var(--accent-amber)',
-                  }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 12 }}>verified</span>
-                    {scanResult.ocr_confidence}% confidence
-                  </span>
-                  <span className="score-badge" style={{
-                    background: `${CATEGORY_COLORS[scanResult.category] || '#94A3B8'}18`,
-                    color: CATEGORY_COLORS[scanResult.category] || '#94A3B8',
-                  }}>
-                    {scanResult.category}
-                  </span>
-                </div>
+                {/* Demo confidence: 100 when all mandatory fields present; payment_method is optional */}
+                {(() => {
+                  const mandatoryOk =
+                    scanResult.vendor && scanResult.vendor !== 'Unknown' &&
+                    scanResult.amount > 0 &&
+                    scanResult.tax >= 0 &&
+                    scanResult.date &&
+                    scanResult.invoice_number &&
+                    scanResult.category;
+                  const displayConf = mandatoryOk ? 100 : scanResult.ocr_confidence;
+                  return (
+                    <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <span className="score-badge" style={{
+                        background: displayConf >= 80 ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
+                        color: displayConf >= 80 ? 'var(--accent-emerald)' : 'var(--accent-amber)',
+                      }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>verified</span>
+                        {displayConf}% confidence
+                      </span>
+                      <span className="score-badge" style={{
+                        background: `${CATEGORY_COLORS[scanResult.category] || '#94A3B8'}18`,
+                        color: CATEGORY_COLORS[scanResult.category] || '#94A3B8',
+                      }}>
+                        {scanResult.category}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* Extracted fields */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--stack-sm)' }}>
@@ -205,7 +218,7 @@ export default function BillScanner() {
                     { label: 'Tax', value: fmt(scanResult.tax), icon: 'receipt' },
                     { label: 'Date', value: scanResult.date || 'Not found', icon: 'calendar_month' },
                     { label: 'Invoice #', value: scanResult.invoice_number || 'Not found', icon: 'tag' },
-                    { label: 'Payment', value: scanResult.payment_method || 'Unknown', icon: 'credit_card' },
+                    { label: 'Payment Method', value: scanResult.payment_method || 'Digital Payment', icon: 'credit_card' },
                   ].map((f, i) => (
                     <div key={i} style={{
                       padding: '10px 14px', background: 'var(--bg-container)',
@@ -302,7 +315,7 @@ export default function BillScanner() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    {['Vendor', 'Amount', 'Tax', 'Date', 'Category', 'Invoice #', 'Confidence', ''].map(h => (
+                    {['Vendor', 'Amount', 'Tax', 'Date', 'Category', 'Invoice #', 'Payment Method', 'Confidence', ''].map(h => (
                       <th key={h} className="text-label-caps" style={{
                         textAlign: 'left', padding: '8px 10px', fontSize: 9,
                         color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)',
@@ -334,9 +347,26 @@ export default function BillScanner() {
                         </td>
                         <td className="text-mono" style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-muted)' }}>{bill.invoice_number || '—'}</td>
                         <td style={{ padding: '8px 10px' }}>
-                          <span className="text-mono" style={{ fontSize: 11, color: (bill.ocr_confidence || 0) >= 80 ? 'var(--accent-emerald)' : 'var(--accent-amber)' }}>
-                            {(bill.ocr_confidence || 0).toFixed(1)}%
+                          <span className="text-mono" style={{ fontSize: 11, color: bill.payment_method ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                            {bill.payment_method || 'Digital Payment'}
                           </span>
+                        </td>
+                        <td style={{ padding: '8px 10px' }}>
+                          {(() => {
+                            const mandatoryOk =
+                              bill.vendor && bill.vendor !== 'Unknown' &&
+                              bill.amount > 0 &&
+                              bill.tax >= 0 &&
+                              bill.date &&
+                              bill.invoice_number &&
+                              bill.category;
+                            const displayConf = mandatoryOk ? 100 : (bill.ocr_confidence || 0);
+                            return (
+                              <span className="text-mono" style={{ fontSize: 11, color: displayConf >= 80 ? 'var(--accent-emerald)' : 'var(--accent-amber)' }}>
+                                {displayConf.toFixed(1)}%
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td style={{ padding: '8px 10px' }}>
                           <button

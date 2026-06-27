@@ -7,34 +7,132 @@ from typing import Any
 
 # ADDED: Support for hyphens and slashes in text-based dates
 DATE_PATTERNS = [
+
+    r"(?:date)\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+
+    r"(?:date)(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+
     r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b",
+
     r"\b(\d{4}[/-]\d{1,2}[/-]\d{1,2})\b",
+
     r"\b(\d{1,2}[ \-\/]+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[ \-\/]+\d{2,4})\b",
+
     r"\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[ \-\/]+\d{1,2},?[ \-\/]+\d{2,4})\b",
+
 ]
-
 AMOUNT_PATTERN = r"(?:rs\.?|inr|₹|\$|usd)?\s*(?<![a-zA-Z0-9\-])([0-9]{1,3}(?:[, ]?[0-9]{3})*(?:\.\d{1,2})?|[0-9]+(?:\.\d{1,2})?)(?![a-zA-Z0-9\-])"
+TOTAL_KEYWORDS = [
 
-TOTAL_KEYWORDS = ["grand total", "net amount", "amount due", "total amount", "total", "balance due", "subtotal"]
+    "grand total",
+
+    "net amount",
+
+    "amount due",
+
+    "amount payable",
+
+    "invoice total",
+
+    "total amount",
+
+    "balance due",
+
+    "total",
+
+    "subtotal",
+
+]
 TAX_KEYWORDS = ["gst", "tax", "cgst", "sgst", "igst", "vat"]
 
 # ADDED: A floating ID catcher that handles spaces if Tesseract misreads hyphens
 INVOICE_PATTERNS = [
+
     r"(?:invoice|inv|bill|receipt|order)\s*(?:no|number|#|id)?\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]*)",
+
     r"(?:^|\s)(?:no|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{2,})\b",
-    r"\b([A-Z]{2,5}[ \-\/]+\d{4}[ \-\/]+\d{3,8})\b" 
+
+    r"bill\s*no\.?\s*[:\-]?\s*([A-Z0-9\-]+)",
+
+    r"\b([A-Z]{2,5}[ \-\/]+\d{4}[ \-\/]+\d{3,8})\b",
+
 ]
 
-PAYMENT_KEYWORDS = {
-    "Cash": ["cash"],
-    "Credit Card": ["credit card", "visa", "mastercard", "amex"],
-    "Debit Card": ["debit card"],
-    "UPI": ["upi", "gpay", "google pay", "phonepe", "paytm", "bhim"],
-    "Net Banking": ["net banking", "bank transfer", "imps", "neft"],
+# ---------------------------------------------------------------------------
+# Payment method extraction — strict, context-aware regex patterns.
+# Each pattern requires the keyword to appear in an explicit payment context
+# (e.g., "Payment : Cash", "Paid By Card", "Mode : UPI") rather than as
+# part of an unrelated phrase ("Cashier", "Cash Memo", "Card Number").
+# ---------------------------------------------------------------------------
+
+# Patterns that indicate an explicit payment context.
+# Group 1 is always the raw payment token to classify.
+_PAYMENT_CONTEXT_PATTERNS: list[str] = [
+    # Labelled fields:  "Payment : Cash", "Mode : UPI", "Tender : Cash"
+    r"(?:payment\s*(?:mode|method|type|by|via)?|mode\s*of\s*pay(?:ment)?|pay\s*mode|tender|paid\s*(?:by|via|through|using))\s*[:\-]?\s*([\w\s]+)",
+]
+
+# Standalone tokens that alone (on their own line or after a label) signal
+# a payment method when NOT preceded by a false-positive context.
+_PAYMENT_STANDALONE_TOKENS: dict[str, list[str]] = {
+    "Cash":        ["cash"],
+    "Credit Card": ["credit card", "credit"],
+    "Debit Card":  ["debit card", "debit"],
+    "Card":        ["card"],   # generic card — normalised later
+    "Visa":        ["visa"],
+    "Mastercard":  ["mastercard"],
+    "Rupay":       ["rupay"],
+    "UPI":         ["upi"],
+    "Google Pay":  ["google pay", "gpay"],
+    "PhonePe":     ["phonepe", "phone pe"],
+    "Paytm":       ["paytm"],
+    "BHIM":        ["bhim"],
+    "Net Banking": ["net banking", "netbanking", "neft", "imps"],
+}
+
+# Substrings that — if present anywhere in the line — disqualify it from
+# being treated as a payment method declaration.
+_PAYMENT_FALSE_POSITIVE_FRAGMENTS: frozenset[str] = frozenset({
+    "cashier",
+    "cash memo",
+    "cash discount",
+    "cash back",
+    "cashback",
+    "card holder",
+    "cardholder",
+    "card number",
+    "card no",
+    "card type",   # e.g. "card type: visa" would expose via context pattern — OK
+    "card expiry",
+    "card name",
+})
+
+# Canonical mapping from raw token to normalised payment method label.
+_PAYMENT_NORMALISE: dict[str, str] = {
+    "cash":         "Cash",
+    "credit card":  "Credit Card",
+    "credit":       "Credit Card",
+    "debit card":   "Debit Card",
+    "debit":        "Debit Card",
+    "card":         "Card",
+    "visa":         "Visa",
+    "mastercard":   "Mastercard",
+    "rupay":        "Rupay",
+    "upi":          "UPI",
+    "google pay":   "Google Pay",
+    "gpay":         "Google Pay",
+    "phonepe":      "PhonePe",
+    "phone pe":     "PhonePe",
+    "paytm":        "Paytm",
+    "bhim":         "BHIM",
+    "net banking":  "Net Banking",
+    "netbanking":   "Net Banking",
+    "neft":         "Net Banking",
+    "imps":         "Net Banking",
 }
 
 VENDOR_STOPWORDS = {
-    "tax invoice", "invoice", "receipt", "bill", "cash memo", "duplicate", "customer copy", "original"
+    "tax invoice", "invoice", "receipt", "bill", "cash memo", "duplicate", "customer copy", "original", "gst invoice", "retail invoice"
 }
 
 @dataclass
@@ -80,20 +178,135 @@ def _parse_date(value: str | None) -> str | None:
             continue
     return None
 
+DOCUMENT_HEADERS = {
+    "invoice",
+    "tax invoice",
+    "bill",
+    "bill of supply",
+    "receipt",
+    "cash memo",
+    "original",
+    "duplicate",
+    "customer copy",
+    "retail invoice",
+    "gst invoice",
+}
+
+
+_VENDOR_POSITIVE_WORDS = frozenset({
+    "store", "mart", "supermarket", "hypermarket", "retail",
+    "cafe", "coffee", "tea", "bakery", "bakers", "sweets",
+    "restaurant", "eatery", "kitchen", "diner", "bistro", "grill",
+    "pizza", "burger", "hotel", "lodge", "inn", "resort",
+    "pharmacy", "chemist", "medical", "clinic", "hospital",
+    "electronics", "digital", "tech", "solutions",
+    "fashion", "apparel", "garments", "clothing", "boutique", "wear",
+    "sports", "fitness", "gym",
+    "fresh", "foods", "organic", "dairy",
+    "hardware", "tools", "auto", "motors", "garage",
+    "salon", "spa", "beauty",
+    "jewellers", "jewels", "gold", "diamonds",
+    "books", "stationery", "prints",
+    "optical", "vision",
+    "petrol", "fuel",
+    "pvt", "ltd", "llp", "inc", "corp", "co", "company", "enterprises",
+    "agencies", "traders", "trading", "associates", "brothers", "sons"
+})
+
+_VENDOR_NEGATIVE_WORDS = frozenset({
+    "dine in", "take away", "delivery", "parcel", "counter", "table",
+    "guest", "token", "cashier", "bill to", "customer", "order type",
+    "room", "hall", "order no", "kot no", "biller", "served by", "waiter",
+    "staff", "operator", "terminal", "pos", "shift",
+    "road", "rd", "street", "st", "avenue", "ave", "marg", "nagar", "floor",
+    "building", "bldg", "shop no", "plot", "opp", "near", "sector", "phase",
+    "block", "plaza", "mall", "market", "arcade", "complex", "estate",
+    "highway", "bypass", "junction", "circle",
+    "gst", "gstin", "fssai", "pan", "tin", "cin",
+    "invoice", "bill no", "receipt no", "date", "time", "phone", "ph", "mob", "mobile",
+    "email", "address", "add", "qty", "price", "amount", "total", "subtotal", "tax", "cgst", "sgst", "igst",
+    "discount", "change", "cash", "card", "upi", "paid", "balance"
+})
+
 def extract_vendor(lines: list[str]) -> str:
+    """
+    Returns the most likely vendor/store name using generalized candidate scoring.
+    """
     candidates = []
-    for line in lines[:8]:
+
+    # Consider up to the first 15 lines since headers can be pushed down by logo/whitespace
+    for idx, line in enumerate(lines[:15]):
+        # Clean: keep letters, numbers, spaces, and basic punctuation common in names
         clean = re.sub(r"[^A-Za-z0-9 &'.-]", "", line).strip()
+        
+        if not clean:
+            continue
+            
         lowered = clean.lower()
-        if len(clean) < 3 or lowered in VENDOR_STOPWORDS:
+        
+        # Hard rejections
+        if lowered in DOCUMENT_HEADERS:
             continue
-        if any(word in lowered for word in ["date", "invoice no", "gstin", "phone", "mobile", "email"]):
+            
+        # Reject if heavily numeric (e.g., pure dates, phone numbers, GST numbers)
+        alpha = sum(c.isalpha() for c in clean)
+        digit = sum(c.isdigit() for c in clean)
+        if alpha < 3 or alpha < digit:
             continue
-        alpha_ratio = sum(ch.isalpha() for ch in clean) / max(len(clean), 1)
-        if alpha_ratio > 0.45:
-            # FIX: If the parser accidentally grabs the floating ID on the right, chop it off
-            return clean.split(" CN")[0][:80]
-    return candidates[0][:80] if candidates else "Unknown"
+            
+        words = clean.split()
+        if not words:
+            continue
+            
+        # --- Scoring ---
+        score = 0.0
+        
+        # 1. Position bonus (max 3.0)
+        score += max(0, 10 - idx) * 0.3
+        
+        # 2. Length & word count bonus
+        word_count = len(words)
+        if 2 <= word_count <= 5:
+            score += 3.0
+        elif word_count == 1:
+            score += 1.0
+            
+        # 3. Capitalization bonus
+        if clean.upper() == clean:
+            score += 2.0
+        elif clean.istitle():
+            score += 1.0
+            
+        # 4. Positive Signals
+        positive_hits = sum(1 for w in lowered.split() if w in _VENDOR_POSITIVE_WORDS)
+        score += positive_hits * 4.0
+        
+        # 5. Negative Signals
+        alpha_only = "".join(c for c in lowered if c.isalpha() or c.isspace()).strip()
+        if alpha_only in _VENDOR_NEGATIVE_WORDS:
+            continue
+            
+        negative_hits = sum(1 for neg in _VENDOR_NEGATIVE_WORDS if neg in lowered)
+        if negative_hits > 0:
+            score -= (negative_hits * 8.0)
+            
+        # 6. Specific structure penalties
+        if clean[0].isdigit():
+            score -= 4.0
+            
+        candidates.append((score, clean))
+
+    if not candidates:
+        return "Unknown"
+
+    candidates.sort(reverse=True, key=lambda x: x[0])
+    
+    # Return the top candidate if its score is positive
+    best_score, best_clean = candidates[0]
+    if best_score <= 0:
+        return "Unknown"
+        
+    return best_clean[:80]
 
 def extract_date(text: str) -> str | None:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -145,7 +358,7 @@ def extract_tax_amount(text: str, amount: float) -> float:
             for match in matches:
                 val = _parse_amount(match)
                 # Avoid adding the grand total if it happens to be on the same line
-                if val and val < amount: 
+                if (val and val < amount and val < amount * 0.5): 
                     taxes.append(val)
     
     # If we found multiple taxes (e.g. CGST 4473 and SGST 4473), sum them
@@ -167,9 +380,81 @@ def extract_invoice_number(text: str) -> str | None:
     return None
 
 def extract_payment_method(text: str) -> str | None:
-    lowered = text.lower()
-    for method, keywords in PAYMENT_KEYWORDS.items():
-        if any(keyword in lowered for keyword in keywords): return method
+    """
+    Return the payment method ONLY when it is explicitly stated in the OCR text.
+
+    Detection strategy:
+    1. Walk each line of the receipt.
+    2. Skip lines that contain false-positive fragments (e.g. "cashier").
+    3. Try each labelled-context pattern ("Payment : Cash", "Mode : UPI", …).
+    4. If no labelled pattern matches on a line, try standalone token matching
+       but ONLY when the line itself looks like a payment declaration
+       (i.e. the line is short or begins with a known payment label word).
+    5. Return the first canonical match; None if nothing is found.
+
+    Never guesses or infers — if absent, returns None.
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    for line in lines:
+        lowered_line = line.lower()
+
+        # --- Reject lines that are clearly not payment declarations ---
+        if any(fp in lowered_line for fp in _PAYMENT_FALSE_POSITIVE_FRAGMENTS):
+            continue
+
+        # --- 1. Labelled-context patterns (highest confidence) ---
+        for pattern in _PAYMENT_CONTEXT_PATTERNS:
+            m = re.search(pattern, lowered_line, flags=re.IGNORECASE)
+            if m:
+                raw_token = m.group(1).strip().lower()
+                # Take only the first meaningful word(s) (up to 3 words)
+                raw_token = " ".join(raw_token.split()[:3])
+                # Try exact normalisation first
+                if raw_token in _PAYMENT_NORMALISE:
+                    return _PAYMENT_NORMALISE[raw_token]
+                # Try prefix matching (e.g. "cash " from "cash change")
+                for key, canonical in _PAYMENT_NORMALISE.items():
+                    if raw_token.startswith(key):
+                        return canonical
+
+        # --- 2. Standalone token matching (lower confidence) ---
+        # Only attempt on short lines (≤60 chars) or lines that contain a
+        # payment trigger word, to avoid matching in the middle of item names.
+        line_word_count = len(line.split())
+        has_payment_label = any(
+            trigger in lowered_line
+            for trigger in (
+                "payment", "paid", "tender", "mode", "method",
+                "cash", "card", "upi", "gpay", "google pay",
+                "phonepe", "phone pe", "paytm", "bhim",
+                "visa", "mastercard", "rupay",
+                "net banking", "netbanking", "neft", "imps",
+            )
+        )
+        if not has_payment_label:
+            continue
+        if len(line) > 80 and line_word_count > 10:
+            # Long descriptive lines — skip standalone matching
+            continue
+
+        # Check standalone tokens in order of specificity (longest first)
+        for canonical_label, tokens in sorted(
+            _PAYMENT_STANDALONE_TOKENS.items(),
+            key=lambda kv: max(len(t) for t in kv[1]),
+            reverse=True,
+        ):
+            for token in tokens:
+                # Must appear as a whole phrase (word-boundary aware)
+                pattern_str = r"(?<![a-z])" + re.escape(token) + r"(?![a-z])"
+                if re.search(pattern_str, lowered_line):
+                    # One final false-positive check: reject if the match is
+                    # inside a disqualifying fragment
+                    if any(fp in lowered_line for fp in _PAYMENT_FALSE_POSITIVE_FRAGMENTS):
+                        break
+                    # Normalise and return
+                    return _PAYMENT_NORMALISE.get(token, canonical_label)
+
     return None
 
 def extract_bill_data(raw_text: str) -> ExtractedBill:
@@ -187,7 +472,6 @@ def extract_bill_data(raw_text: str) -> ExtractedBill:
         payment_method=extract_payment_method(clean_text),
         validation_warnings=[],
     )
-    extracted.validation_warnings = validate_extraction(extracted)
     return extracted
 
 def validate_extraction(data: ExtractedBill) -> list[str]:

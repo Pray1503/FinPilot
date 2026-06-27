@@ -1,35 +1,88 @@
 # ocr/ocr_engine.py
+
 import io
-import pytesseract
+import tempfile
+
+from paddleocr import PaddleOCR
+import paddle
+import paddleocr
+import sys
+
+print("=" * 60)
+print("PYTHON    :", sys.executable)
+print("PADDLE    :", paddle.__version__, paddle.__file__)
+print("PADDLEOCR :", paddleocr.__version__, paddleocr.__file__)
+print("=" * 60)
+
+
 from PIL import Image, ImageFilter, ImageOps
 
-# Point pytesseract at your specific local Windows installation path
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\pray\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+# Initialize PaddleOCR only once when FastAPI starts
+ocr = PaddleOCR(
+    lang="en"
+)
+
 
 def run_ocr(image_bytes: bytes) -> list[str]:
     """
-    Run Tesseract on image bytes.
+    Run PaddleOCR on image bytes.
     Returns a clean list of text lines for the parser.
     """
-    # 1. Load the image from the raw bytes sent by FastAPI
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    img = ImageOps.exif_transpose(img) 
 
-    # 2. Pre-processing: Upscale small images for better accuracy
+    # 1. Load image
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = ImageOps.exif_transpose(img)
+
+    # 2. Upscale small images
     w, h = img.size
+
     if w < 1000:
         scale = 1000 / w
         resample_filter = getattr(Image, "Resampling", Image).LANCZOS
-        img = img.resize((int(w * scale), int(h * scale)), resample_filter)
+        img = img.resize(
+            (int(w * scale), int(h * scale)),
+            resample_filter
+        )
 
-    # 3. Pre-processing: Grayscale and sharpen
+    # 3. Grayscale + sharpen
     gray = ImageOps.grayscale(img)
     processed = gray.filter(ImageFilter.SHARPEN)
 
-    # 4. Tesseract Extraction (PSM 6 handles receipt layouts well)
-    custom_config = r"--psm 6"
-    raw_text: str = pytesseract.image_to_string(processed, config=custom_config)
+    # 4. Save temporary image for PaddleOCR
+    with tempfile.NamedTemporaryFile(
+        suffix=".png",
+        delete=False
+    ) as tmp:
 
-    # 5. Clean up and return as a list of lines
-    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+        processed.save(tmp.name)
+
+        result = ocr.ocr(
+            tmp.name,
+        )
+
+    # 5. Convert PaddleOCR output to list[str]
+    lines = []
+
+    if result and result[0]:
+        print("\n" + "=" * 80)
+        print("RAW PADDLEOCR DETECTIONS")
+        print("=" * 80)
+
+        for item in result[0]:
+
+            box = item[0]
+            text = item[1][0].strip()
+            confidence = item[1][1]
+
+            print("-" * 80)
+            print(f"Confidence : {confidence:.3f}")
+            print(f"Text       : {text}")
+            print(f"Box        : {box}")
+            print("-" * 80)
+
+            if text:
+                lines.append(text)
+
+    print("=" * 80 + "\n")
+
     return lines

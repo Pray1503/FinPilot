@@ -161,36 +161,75 @@ def boardroom_smart(req: BoardroomRequest):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @app.get("/api/cashflow/data")
-def cashflow_data(income: float = 42000, expenses: float = 34500, savings: float = 1260000):
+def cashflow_data(
+    income: float = 42000,
+    expenses: float = 34500,
+    savings: float = 1260000,
+):
     """Get historical + forecast cash flow data, scaled by user profile."""
     try:
         from cashflow.engine import generate_cash_flow_data
-        hist, forecast = generate_cash_flow_data(income=income, expenses=expenses, savings=savings)
+
+        hist, forecast = generate_cash_flow_data(
+            income=income,
+            expenses=expenses,
+            savings=savings,
+        )
+
         return {
             "historical": hist.to_dict(orient="records"),
             "forecast": forecast.to_dict(orient="records"),
         }
+
     except Exception as e:
+        print("\n========== CASHFLOW DATA ERROR ==========")
+        traceback.print_exc()
+        print("=========================================\n")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/cashflow/transactions")
-def cashflow_transactions(income: float = 42000, expenses: float = 34500, savings: float = 1260000):
+def cashflow_transactions(
+    income: float = 42000,
+    expenses: float = 34500,
+    savings: float = 1260000,
+):
     """Get synthetic transaction data scaled by user profile."""
     try:
         from cashflow.engine import generate_transactions
-        txns = generate_transactions(income=income, expenses=expenses, savings=savings)
-        return {"transactions": txns.to_dict(orient="records")}
+
+        txns = generate_transactions(
+            income=income,
+            expenses=expenses,
+            savings=savings,
+        )
+
+        return {
+            "transactions": txns.to_dict(orient="records")
+        }
+
     except Exception as e:
+        print("\n========== CASHFLOW TRANSACTIONS ERROR ==========")
+        traceback.print_exc()
+        print("=================================================\n")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/cashflow/health")
-def cashflow_health(income: float = 42000, expenses: float = 34500, savings: float = 1260000):
+def cashflow_health(
+    income: float = 42000,
+    expenses: float = 34500,
+    savings: float = 1260000,
+):
     """Get financial health score and metrics, personalized to user profile."""
     try:
         from cashflow.engine import generate_cash_flow_data
-        hist, forecast = generate_cash_flow_data(income=income, expenses=expenses, savings=savings)
+
+        hist, forecast = generate_cash_flow_data(
+            income=income,
+            expenses=expenses,
+            savings=savings,
+        )
 
         balance = float(hist["balance"].iloc[-1])
         inflow_30 = float(hist.tail(30)["inflow"].sum())
@@ -198,11 +237,9 @@ def cashflow_health(income: float = 42000, expenses: float = 34500, savings: flo
         net_30 = inflow_30 - outflow_30
         predicted = float(forecast.tail(30)["balance"].iloc[-1])
 
-        # Health score based on income-to-expense ratio and savings coverage
         ratio = inflow_30 / max(outflow_30, 1)
-        savings_months = savings / max(expenses, 1)  # emergency fund coverage
-        
-        base_score = 0
+        savings_months = savings / max(expenses, 1)
+
         if ratio >= 1.3:
             base_score = 85
         elif ratio >= 1.15:
@@ -212,7 +249,6 @@ def cashflow_health(income: float = 42000, expenses: float = 34500, savings: flo
         else:
             base_score = 25
 
-        # Bonus for savings coverage (up to +15 points)
         savings_bonus = min(savings_months * 2.5, 15)
         score = min(int(base_score + savings_bonus), 100)
 
@@ -225,7 +261,11 @@ def cashflow_health(income: float = 42000, expenses: float = 34500, savings: flo
             "predicted_balance": round(predicted),
             "savings_months": round(savings_months, 1),
         }
+
     except Exception as e:
+        print("\n========== CASHFLOW HEALTH ERROR ==========")
+        traceback.print_exc()
+        print("===========================================\n")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -341,37 +381,62 @@ async def scan_bill(file: UploadFile = File(...)):
         bill = extract_bill_data(raw_text)
         category, scores = categorize_expense(bill.vendor, raw_text)
 
+        # 3b. Run LLM extraction and fuse with regex results
+        from llm.receipt_extractor import extract_receipt_with_llm
+        from fusion.fusion_engine import merge_extractions
+
+        llm_result = extract_receipt_with_llm(raw_text)
+        fused = merge_extractions(bill.to_dict(), llm_result, raw_text)
+
+        # Use fused category, falling back to keyword-based categorizer
+        final_category = fused.get("category") or category
+
+        # 3c. Re-validate using fused values so warnings match the final response.
+        #     validate_extraction() is called exactly once, after fusion.
+        #     A lightweight ExtractedBill is constructed from fused fields so the
+        #     existing validation function needs no changes.
+        from ocr.data_extractor import validate_extraction, ExtractedBill as _EB
+        fused_bill_for_validation = _EB(
+            vendor=fused["vendor"],
+            amount=fused["amount"],
+            tax=fused["tax"],
+            date=fused["date"],
+            invoice_number=fused["invoice_number"],
+            payment_method=fused["payment_method"],
+        )
+        final_warnings = validate_extraction(fused_bill_for_validation)
+
         # 4. Save to database
         from ocr.database import add_bill
         import json
 
         bill_id = add_bill(
-            vendor=bill.vendor,
-            amount=bill.amount,
-            tax=bill.tax,
-            date=bill.date,
-            category=category,
-            invoice_number=bill.invoice_number,
+            vendor=fused["vendor"],
+            amount=fused["amount"],
+            tax=fused["tax"],
+            date=fused["date"],
+            category=final_category,
+            invoice_number=fused["invoice_number"],
             image_path=file.filename or "unknown",
             raw_text=raw_text,
-            ocr_confidence=100.0, 
-            payment_method=bill.payment_method,
+            ocr_confidence=fused["ocr_confidence"],
+            payment_method=fused["payment_method"],
             extraction_json=json.dumps(bill.to_dict()),
         )
 
         return {
             "bill_id": bill_id,
-            "vendor": bill.vendor,
-            "amount": bill.amount,
-            "tax": bill.tax,
-            "date": bill.date,
-            "category": category,
-            "invoice_number": bill.invoice_number,
-            "payment_method": bill.payment_method,
-            "ocr_confidence": 100.0,
+            "vendor": fused["vendor"],
+            "amount": fused["amount"],
+            "tax": fused["tax"],
+            "date": fused["date"],
+            "category": final_category,
+            "invoice_number": fused["invoice_number"],
+            "payment_method": fused["payment_method"],
+            "ocr_confidence": fused["ocr_confidence"],
             "raw_text": raw_text,
             "line_count": len(all_lines),
-            "warnings": bill.validation_warnings,
+            "warnings": final_warnings,
         }
     except Exception as e:
         import traceback
