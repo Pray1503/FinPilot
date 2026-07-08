@@ -278,6 +278,7 @@ def simulator_run(req: SimulatorRequest):
     """Run the purchase decision simulation."""
     try:
         from simulator.decision_engine import simulate_purchase
+
         result = simulate_purchase(
             income=req.income,
             current_savings=req.current_savings,
@@ -289,9 +290,18 @@ def simulator_run(req: SimulatorRequest):
             goal_current=req.goal_current,
             goal_alloc=req.goal_alloc,
         )
+
         return _sanitize(result)
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("\n========== SIMULATOR ERROR ==========")
+        traceback.print_exc()
+        print("=====================================\n")
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        )
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -303,15 +313,31 @@ def spending_summary():
     """Get spending analysis and prediction."""
     try:
         csv_path = PROJECT_ROOT / "data" / "student_spending.csv"
+
         if not csv_path.exists():
-            raise HTTPException(status_code=404, detail="Spending data not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Spending data not found: {csv_path}"
+            )
+
         from ml.spending_predictor import SpendingPredictor
+
         pred = SpendingPredictor(str(csv_path))
+
         return pred.get_summary()
+
     except HTTPException:
         raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("\n========== SPENDING SUMMARY ERROR ==========")
+        traceback.print_exc()
+        print("============================================\n")
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        )
 
 
 @app.post("/api/spending/predict")
@@ -319,17 +345,43 @@ def spending_predict(req: MLPredictRequest):
     """Run ML spending prediction."""
     try:
         from ml.predict import predict_spend, is_model_available
+
         if not is_model_available():
-            raise HTTPException(status_code=404, detail="ML model not available")
-        result = predict_spend(req.month_idx, req.is_exam, req.is_fest, req.prev_expense)
+            raise HTTPException(
+                status_code=404,
+                detail="ML model not available"
+            )
+
+        result = predict_spend(
+            req.month_idx,
+            req.is_exam,
+            req.is_fest,
+            req.prev_expense,
+        )
+
         if result is None:
-            raise HTTPException(status_code=500, detail="Prediction failed")
-        return {"predicted_spend": result, "month": req.month_idx}
+            raise HTTPException(
+                status_code=500,
+                detail="Prediction failed"
+            )
+
+        return {
+            "predicted_spend": result,
+            "month": req.month_idx,
+        }
+
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
+    except Exception as e:
+        print("\n========== SPENDING PREDICT ERROR ==========")
+        traceback.print_exc()
+        print("============================================\n")
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 7. Bill Scanner (OCR)
