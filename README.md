@@ -102,29 +102,27 @@ FinPilot summarizes important financial signals into an easy-to-understand finan
 
 ### Dashboard
 
-![FinPilot Dashboard](screenshots/finpilot-dashboard.png)
+![FinPilot Dashboard](screenshots/finpilot-dashboard(1).png)
 
 ### AI Financial Boardroom
 
-![AI Financial Boardroom](screenshots/finpilot-boardroom.png)
+![AI Financial Boardroom](screenshots/finpilot-boardroom(1).png)
 
 ### Decision Simulator
 
-![Decision Simulator](screenshots/finpilot-decision-simulator.png)
+![Decision Simulator](screenshots/finpilot-decision-simulator(1).png)
 
 ### AI Bill & Receipt Scanner
 
-![AI Bill Scanner](screenshots/finpilot-bill-scanner.png)
+![AI Bill Scanner](screenshots/finpilot-bill-scanner(1).png)
 
 ### Spending Insights
 
-![Spending Insights](screenshots/finpilot-spending-insights.png)
+![Spending Insights](screenshots/finpilot-spending-insights(1).png)
 
 ### Cash Flow Prediction
 
-![Cash Flow Prediction](screenshots/finpilot-cash-flow.png)
-
----
+![Cash Flow Prediction](screenshots/finpilot-cash-flow(1).png)
 
 ## 🏗️ System Architecture
 
