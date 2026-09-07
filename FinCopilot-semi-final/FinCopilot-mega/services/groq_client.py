@@ -17,7 +17,7 @@ _project_dir = Path(__file__).resolve().parent.parent
 load_dotenv(_project_dir / ".env")
 load_dotenv(_project_dir.parent / ".env")
 
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 _api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("groq_api_key") or ""
 
